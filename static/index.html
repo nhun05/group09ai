@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phân tích cảm xúc khách hàng</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #f7f7f7;
+      margin: 0; padding: 0;
+    }
+    .header {
+      background-color: #1e2a47; color: white;
+      padding: 20px; text-align: center;
+      font-size: 1.5rem; font-weight: 600;
+    }
+    p.description { text-align: center; margin: 16px 0 30px; color: #444; }
+    .container {
+      display: flex; gap: 30px;
+      max-width: 1200px; margin: 0 auto; padding: 40px;
+    }
+    .input-section, .output-section {
+      flex: 1; background: white;
+      padding: 24px; border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    textarea {
+      width: 100%; height: 200px; font-size: 1rem;
+      padding: 12px; margin-bottom: 16px;
+      border-radius: 6px; border: 1px solid #ccc; resize: vertical;
+    }
+    .buttons {
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+    }
+    button {
+      padding: 10px 20px; font-size: 1rem;
+      border: none; border-radius: 6px; cursor: pointer;
+    }
+    .submit-btn { background: #f97316; color: white; }
+    .clear-btn { background: #e2e8f0; }
+    .output-group { margin-bottom: 20px; }
+    .output-group label { font-weight: 600; display: block; margin-bottom: 6px; }
+    .output-box {
+      background: #f1f5f9; padding: 10px;
+      border-radius: 6px; border: 1px solid #cbd5e1;
+    }
+    ul.aspect-list { list-style: none; padding-left: 0; }
+    ul.aspect-list li { margin-bottom: 4px; }
+    .stats { margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <div class="header">Phân tích cảm xúc & Dịch phản hồi khách hàng</div>
+  <p class="description">Nhập đánh giá hoặc tải file CSV để phân tích cảm xúc và chủ đề.</p>
+
+  <div class="container">
+    <!-- Bên trái: Phân tích văn bản -->
+    <div class="input-section">
+      <h3>Phân tích đánh giá thủ công</h3>
+      <textarea id="inputText" placeholder="Nhập đánh giá khách hàng (tiếng Anh hoặc tiếng Việt)"></textarea>
+      <div class="buttons">
+        <button class="clear-btn" onclick="clearInputs()">Clear</button>
+        <button class="submit-btn" onclick="analyzeText()">Phân tích văn bản</button>
+      </div>
+
+      <!-- Loader cho phân tích văn bản -->
+      <div id="textLoader" style="display:none; text-align:center; margin:10px 0; color:blue;">⏳ Đang phân tích...</div>
+
+      <div class="output-group">
+        <label>Cảm xúc tổng thể</label>
+        <div class="output-box" id="overall"></div>
+      </div>
+      <div class="output-group">
+        <label>Dịch sang tiếng Việt</label>
+        <div class="output-box" id="translated"></div>
+      </div>
+      <div class="output-group">
+        <label>Phân tích theo từng khía cạnh</label>
+        <ul class="aspect-list" id="aspects"></ul>
+      </div>
+      <div class="output-group">
+        <label>Độ tin cậy khi xác định chủ đề:</label>
+        <div class="output-box" id="aspect-score"></div>
+      </div>
+    </div>
+
+    <!-- Bên phải: Phân tích CSV -->
+    <div class="output-section">
+      <h3>Phân tích đánh giá từ file CSV</h3>
+      <input type="file" id="csvFile" accept=".csv" />
+      <div class="buttons">
+        <button class="submit-btn" onclick="analyzeCSV()">Phân tích CSV</button>
+        <button class="submit-btn" id="downloadCsvBtn" style="display:none;">Tải CSV kết quả</button>
+      </div>
+
+
+      <!-- Loader cho phân tích CSV -->
+      <div id="csvLoader" style="display:none; text-align:center; margin:10px 0; color:green;">⏳ Đang phân tích file CSV...</div>
+
+      <div class="stats">
+        <label>Thống kê:</label>
+        <p id="stat-total"></p>
+        <p id="stat-positive"></p>
+        <p id="stat-negative"></p>
+
+        <h4>Phân loại theo chủ đề nhận xét:</h4>
+        <ul id="stat-aspect"></ul>
+
+        <h4>⚠️ Những điểm khách hàng không hài lòng:</h4>
+        <ul id="stat-negative-aspect"></ul>
+      </div>
+      <canvas id="sentimentChart" width="100" height="100"></canvas>
+    </div>
+  </div>
+
+  <script>
+    let sentimentData = { positive: 0, negative: 0 };
+    let sentimentChart = null;
+    let csvOutputUrl = null;
+
+    function clearInputs() {
+      document.getElementById('inputText').value = '';
+      document.getElementById('csvFile').value = '';
+      document.getElementById('overall').textContent = '';
+      document.getElementById('translated').textContent = '';
+      document.getElementById('aspects').innerHTML = '';
+      document.getElementById('aspect-score').textContent = '';
+      document.getElementById('stat-total').textContent = '';
+      document.getElementById('stat-positive').textContent = '';
+      document.getElementById('stat-negative').textContent = '';
+      document.getElementById('stat-aspect').innerHTML = '';
+      document.getElementById('stat-negative-aspect').innerHTML = '';
+      sentimentData = { positive: 0, negative: 0 };
+      if (sentimentChart) { sentimentChart.destroy(); sentimentChart = null; }
+      if (csvOutputUrl) { window.URL.revokeObjectURL(csvOutputUrl); csvOutputUrl = null; }
+      document.getElementById('downloadCsvBtn').style.display = 'none';
+    }
+
+    function updateChart() {
+      const ctx = document.getElementById('sentimentChart').getContext('2d');
+      if (sentimentChart) sentimentChart.destroy();
+      sentimentChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: ['🟢 Tích cực', '🔴 Tiêu cực'],
+          datasets: [{ data: [sentimentData.positive, sentimentData.negative], backgroundColor: ['#10b981', '#ef4444'] }]
+        }
+      });
+    }
+
+  //Phân tích đánh giá thủ công
+   async function analyzeText() {
+  const raw = document.getElementById('inputText').value.trim();
+  if (!raw) return alert("Vui lòng nhập nội dung đánh giá.");
+
+  document.getElementById('textLoader').style.display = 'block'; // Bật loader
+
+  try {
+    const res = await fetch('/analyze-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedbacks: [raw] })
+    });
+
+    const data = await res.json();
+    if (data.results && data.results.length > 0) {
+      const result = data.results[0];
+      document.getElementById('overall').textContent = result.Sentiment;
+      document.getElementById('translated').textContent = result['Translated Review'];
+      const aspectList = document.getElementById('aspects');
+      aspectList.innerHTML = '';
+      const li = document.createElement('li');
+      li.textContent = result['Main Aspect'] ? `Chủ đề chính: ${result['Main Aspect']}` : 'Không xác định chủ đề';
+      aspectList.appendChild(li);
+      document.getElementById('aspect-score').textContent = result['Aspect Confidence'] || '-';
+    }
+  } catch (error) {
+    console.error("Error:", error);
+    alert("Có lỗi khi phân tích văn bản.");
+  } finally {
+    document.getElementById('textLoader').style.display = 'none'; // Tắt loader
+  }
+}
+
+// Phân tích đánh giá từ file CSV
+async function analyzeCSV() {
+  const fileInput = document.getElementById("csvFile");
+  const file = fileInput.files[0];
+  if (!file) return alert("Vui lòng chọn một file CSV.");
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  document.getElementById('csvLoader').style.display = 'block'; // Bật loader CSV
+
+  try {
+    const response = await fetch("/analyze-csv", { method: "POST", body: formData });
+    if (!response.ok) throw new Error("Lỗi khi phân tích file CSV");
+
+    const blob = await response.blob();
+    csvOutputUrl = window.URL.createObjectURL(blob);
+    const downloadBtn = document.getElementById("downloadCsvBtn");
+    downloadBtn.style.display = 'inline-block';
+    downloadBtn.onclick = () => {
+      const a = document.createElement("a");
+      a.href = csvOutputUrl;
+      a.download = "review_analysis_output.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    };
+
+    // Cập nhật biểu đồ + thống kê
+    const summaryRes = await fetch("/get-latest-summary");
+    const summaryData = await summaryRes.json();
+    if (summaryData) {
+      document.getElementById("stat-total").textContent = `🔎 Tổng số đánh giá: ${summaryData.total}`;
+      document.getElementById("stat-positive").textContent = `🟢 Tích cực: ${summaryData.positive}`;
+      document.getElementById("stat-negative").textContent = `🔴 Tiêu cực: ${summaryData.negative}`;
+      sentimentData = { positive: summaryData.positive, negative: summaryData.negative };
+      updateChart();
+
+      const ulAspect = document.getElementById("stat-aspect");
+      const ulNegAspect = document.getElementById("stat-negative-aspect");
+      ulAspect.innerHTML = "";
+      ulNegAspect.innerHTML = "";
+
+      for (const [key, value] of Object.entries(summaryData.aspect_counts)) {
+        const li = document.createElement("li");
+        li.textContent = `${key}: ${value}`;
+        ulAspect.appendChild(li);
+      }
+
+      for (const [key, value] of Object.entries(summaryData.negative_by_aspect)) {
+        const li = document.createElement("li");
+        li.textContent = `${key}: ${value}`;
+        ulNegAspect.appendChild(li);
+      }
+    }
+
+    alert("✅ Phân tích CSV xong! Có thể tải file kết quả.");
+  } catch (error) {
+    console.error("Error:", error);
+    alert("Có lỗi khi xử lý file CSV.");
+  } finally {
+    document.getElementById('csvLoader').style.display = 'none'; // Tắt loader CSV
+  }
+}
+
+  </script>
+</body>
+</html>
