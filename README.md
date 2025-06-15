@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Ứng dụng Phân Tích Cảm Xúc và Dịch Máy
 
 Đây là một sản phẩm demo ứng dụng Xử lý ngôn ngữ tự nhiên (NLP) sử dụng các mô hình Transformer để phân tích cảm xúc và dịch văn bản tiếng Anh sang tiếng Việt. Giao diện web cho phép người dùng:
@@ -58,3 +59,6 @@ Dành cho mục đích học tập và nghiên cứu.
 ---
 
 ✅ *Đề tài: Ứng dụng NLP trong phân tích cảm xúc và dịch máy với mô hình Transformer*
+
+# group09ai
+
